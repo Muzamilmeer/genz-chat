@@ -1,0 +1,87 @@
+<!-- chat.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chat - BaateinDilSe</title>
+  <style>
+    body { background: #111; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
+    #chatBox { border: 1px solid #444; padding: 10px; height: 300px; overflow-y: scroll; background: #222; }
+    input, button { padding: 10px; margin-top: 10px; width: 100%; }
+  </style>
+</head>
+<body>
+  <h2>👤 Anonymous Chat</h2>
+  <div id="chatBox"></div>
+  <input type="text" id="msgInput" placeholder="Type your message..." />
+  <button onclick="sendMessage()">Send</button>
+
+  <!-- Firebase Setup -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "your-app.firebaseapp.com",
+      databaseURL: "https://your-app-default-rtdb.firebaseio.com",
+      projectId: "your-app",
+      storageBucket: "your-app.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "your-app-id"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let userId = "user_" + Math.floor(Math.random() * 100000);
+    let chatId = null;
+
+    const waitingRef = db.ref("waiting");
+    waitingRef.once("value", snap => {
+      const data = snap.val();
+      if (data && data.user && data.user !== userId) {
+        chatId = "chat_" + Date.now();
+        db.ref("chats/" + chatId + "/messages").set([]);
+        db.ref("chats/" + chatId + "/users").set([userId, data.user]);
+        db.ref("users/" + userId + "/chatId").set(chatId);
+        db.ref("users/" + data.user + "/chatId").set(chatId);
+        waitingRef.remove();
+        listenForMessages();
+      } else {
+        waitingRef.set({ user: userId });
+        db.ref("users/" + userId + "/chatId").on("value", snap => {
+          if (snap.val()) {
+            chatId = snap.val();
+            listenForMessages();
+          }
+        });
+      }
+    });
+
+    function listenForMessages() {
+      db.ref("chats/" + chatId + "/messages").on("value", snap => {
+        const chatBox = document.getElementById("chatBox");
+        chatBox.innerHTML = "";
+        const messages = snap.val();
+        if (messages) {
+          Object.values(messages).forEach(msg => {
+            const p = document.createElement("p");
+            p.textContent = msg.sender + ": " + msg.text;
+            chatBox.appendChild(p);
+          });
+        }
+      });
+    }
+
+    function sendMessage() {
+      const input = document.getElementById("msgInput");
+      const message = input.value.trim();
+      if (message && chatId) {
+        const msgRef = db.ref("chats/" + chatId + "/messages").push();
+        msgRef.set({ sender: userId, text: message });
+        input.value = "";
+      }
+    }
+  </script>
+</body>
+</html>
